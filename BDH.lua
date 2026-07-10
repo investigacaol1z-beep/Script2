@@ -608,4 +608,297 @@ end)
 tabESP.MouseButton1Click:Connect(function()
     aimbotContainer.Visible = false
     autoKillContainer.Visible = false
-    espContainer.Visible =
+    espContainer.Visible = tabESP.MouseButton1Click:Connect(function()
+    aimbotContainer.Visible = false
+    autoKillContainer.Visible = false
+    espContainer.Visible = true
+    tabESP.BackgroundColor3 = Color3.fromRGB(70, 70, 75)
+    tabAimbot.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    tabAutoKill.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+end)
+
+-- Funções do Aimbot
+aimbotToggle.MouseButton1Click:Connect(function()
+    aimbotEnabled = not aimbotEnabled
+    aimbotToggle.Text = aimbotEnabled and "🔒 Aimbot: ON" or "🔒 Aimbot: OFF"
+    aimbotToggle.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(60, 60, 65)
+    print("🔒 Aimbot: " .. (aimbotEnabled and "ON" or "OFF"))
+end)
+
+-- FOV Toggle
+fovToggle.MouseButton1Click:Connect(function()
+    fovEnabled = not fovEnabled
+    fovToggle.Text = fovEnabled and "🎯 FOV: ON" or "🎯 FOV: OFF"
+    fovToggle.BackgroundColor3 = fovEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(60, 60, 65)
+    
+    if fovCircle then
+        fovCircle.Visible = fovEnabled
+        print("🎯 FOV: " .. (fovEnabled and "ON" or "OFF"))
+        if fovEnabled then
+            updateFOV()
+        end
+    end
+end)
+
+-- Funções ESP
+espToggle.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled
+    espToggle.Text = espEnabled and "🌈 ESP RGB: ON" or "🌈 ESP RGB: OFF"
+    espToggle.BackgroundColor3 = espEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(60, 60, 65)
+    
+    if not espEnabled then
+        for p, _ in pairs(espObjects) do
+            destroyESP(p)
+        end
+    else
+        updateESP()
+    end
+end)
+
+-- Minimizar
+minimizeButton.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    contentContainer.Visible = not isMinimized
+    mainFrame.Size = isMinimized and UDim2.new(0, 350, 0, 35) or UDim2.new(0, 350, 0, 480)
+    minimizeButton.Text = isMinimized and "□" or "─"
+end)
+
+-- Fechar
+closeButton.MouseButton1Click:Connect(function()
+    isVisible = not isVisible
+    mainFrame.Visible = isVisible
+    if not isVisible then
+        if fovCircle then fovCircle.Visible = false end
+    else
+        if fovEnabled and fovCircle then
+            fovCircle.Visible = true
+        end
+    end
+end)
+
+-- Arrastar
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isDragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                isDragging = false
+            end
+        end)
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        if isDragging then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end
+end)
+
+-- Aimbot principal
+runService.RenderStepped:Connect(function()
+    if not aimbotEnabled or not isVisible then 
+        return 
+    end
+    
+    -- Atualiza o FOV se estiver ativo
+    if fovEnabled and fovCircle then
+        updateFOV()
+    end
+    
+    local target = nil
+    local closestDistance = fovEnabled and fovRadius or math.huge
+    
+    if aimbotMode == "Select" and targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") and targetPlayer.Character.Humanoid.Health > 0 then
+        target = targetPlayer.Character
+    elseif aimbotMode == "All" then
+        for _, v in pairs(players:GetPlayers()) do
+            if v ~= player and v.Character and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
+                local head = v.Character:FindFirstChild("Head")
+                if head then
+                    local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+                    if onScreen then
+                        local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)).Magnitude
+                        if fovEnabled then
+                            if distance < fovRadius and distance < closestDistance then
+                                closestDistance = distance
+                                target = v.Character
+                            end
+                        else
+                            if distance < closestDistance then
+                                closestDistance = distance
+                                target = v.Character
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    if target and target:FindFirstChild("Head") then
+        local head = target.Head
+        camera.CFrame = CFrame.new(camera.CFrame.Position, head.Position)
+    end
+end)
+
+-- Auto Kill
+autoKillToggle.MouseButton1Click:Connect(function()
+    autoKillEnabled = not autoKillEnabled
+    autoKillToggle.Text = autoKillEnabled and "⚡ Auto Kill: ON" or "⚡ Auto Kill: OFF"
+    autoKillToggle.BackgroundColor3 = autoKillEnabled and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(60, 60, 65)
+    print("⚡ Auto Kill: " .. (autoKillEnabled and "ON" or "OFF"))
+    
+    if autoKillEnabled then
+        spawn(function()
+            while autoKillEnabled and isVisible do
+                for _, v in pairs(players:GetPlayers()) do
+                    if v ~= player and v.Character and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
+                        local character = v.Character
+                        local head = character:FindFirstChild("Head")
+                        if head and player.Character then
+                            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                            if hrp then
+                                hrp.CFrame = head.CFrame * CFrame.new(0, 0, 3)
+                            end
+                            wait(0.05)
+                            camera.CFrame = CFrame.new(camera.CFrame.Position, head.Position)
+                            wait(0.05)
+                            for i = 1, 3 do
+                                shoot()
+                                wait(0.05)
+                            end
+                        end
+                    end
+                end
+                wait(0.3)
+            end
+        end)
+    end
+end)
+
+-- Auto Kill V2
+autoKillV2Toggle.MouseButton1Click:Connect(function()
+    autoKillV2Enabled = not autoKillV2Enabled
+    autoKillV2Toggle.Text = autoKillV2Enabled and "🎯 Auto Kill V2: ON" or "🎯 Auto Kill V2: OFF"
+    autoKillV2Toggle.BackgroundColor3 = autoKillV2Enabled and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(60, 60, 65)
+    print("🎯 Auto Kill V2: " .. (autoKillV2Enabled and "ON" or "OFF"))
+    
+    if autoKillV2Enabled then
+        spawn(function()
+            while autoKillV2Enabled and isVisible do
+                local alivePlayers = {}
+                for _, v in pairs(players:GetPlayers()) do
+                    if v ~= player and v.Character and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
+                        table.insert(alivePlayers, v.Character)
+                    end
+                end
+                
+                if #alivePlayers > 0 and player.Character then
+                    local randomTarget = alivePlayers[math.random(1, #alivePlayers)]
+                    local head = randomTarget:FindFirstChild("Head")
+                    if head then
+                        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            local wallPos = head.Position + Vector3.new(math.random(-20, 20), 0, math.random(-20, 20))
+                            hrp.CFrame = CFrame.new(wallPos)
+                        end
+                        wait(0.05)
+                        camera.CFrame = CFrame.new(camera.CFrame.Position, head.Position)
+                        wait(0.05)
+                        for i = 1, 3 do
+                            shoot()
+                            wait(0.05)
+                        end
+                    end
+                end
+                wait(0.5)
+            end
+        end)
+    end
+end)
+
+-- Slider FOV
+local dragging = false
+radiusSlider.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+    end
+end)
+
+userInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+userInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local absPos = radiusSlider.AbsolutePosition
+        local absSize = radiusSlider.AbsoluteSize
+        local mousePos = input.Position.X
+        local percent = math.clamp((mousePos - absPos.X) / absSize.X, 0, 1)
+        fovRadius = math.floor(50 + percent * 350)
+        radiusFill.Size = UDim2.new(percent, 0, 1, 0)
+        radiusLabel.Text = "Raio: " .. fovRadius
+        if fovCircle then
+            fovCircle.Radius = fovRadius
+        end
+    end
+end)
+
+-- Atualizar ESP
+game.Players.PlayerAdded:Connect(function()
+    wait(0.5)
+    updateESP()
+    updatePlayerList()
+end)
+
+game.Players.PlayerRemoving:Connect(function(p)
+    if espObjects[p] then
+        destroyESP(p)
+    end
+    updatePlayerList()
+end)
+
+runService.RenderStepped:Connect(function()
+    if espEnabled then
+        updateESP()
+    end
+end)
+
+-- Atalho Insert
+userInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Insert then
+        isVisible = not isVisible
+        mainFrame.Visible = isVisible
+        if not isVisible then
+            if fovCircle then fovCircle.Visible = false end
+        else
+            if fovEnabled and fovCircle then
+                fovCircle.Visible = true
+                updateFOV()
+            end
+        end
+    end
+end)
+
+-- Inicialização
+camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    updateFOV()
+end)
+
+findShootEvent()
+updatePlayerList()
+
+print("✅ BDH UM TOQUE v6.0 carregado com sucesso!")
+print("📌 Pressione INSERT para abrir/fechar o painel")
+print("📌 Selecione um player na lista ou 'All' para mirar em todos")
+print("📌 Botão ─ para minimizar")
+print("📌 Botão ✕ para fechar")
+print("📌 ESP RGB com cores dinâmicas!")
